@@ -68,7 +68,6 @@ from nltk.tag import simplify_brown_tag, simplify_wsj_tag,\
 
 from .util import LazyCorpusLoader
 from .reader import *
-
 abc = LazyCorpusLoader(
     'abc', PlaintextCorpusReader, r'(?!\.).*\.txt', encoding=[
             ('science', 'latin_1'),
@@ -209,6 +208,7 @@ webtext = LazyCorpusLoader(
     'webtext', PlaintextCorpusReader, r'(?!README|\.).*\.txt', encoding='ISO-8859-2')
 wordnet = LazyCorpusLoader(
     'wordnet', WordNetCorpusReader)
+multiwordnet = MultiWordNetCorpusReader()
 wordnet_ic = LazyCorpusLoader(
     'wordnet_ic', WordNetICCorpusReader, '.*\.dat')
 words = LazyCorpusLoader(

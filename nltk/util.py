@@ -1112,7 +1112,7 @@ def binary_search_file(file, key, cache={}, cacheDepth=-1):
                     return None
             if currentDepth < cacheDepth:
                 cache[middle] = (offset, line)
-
+        print(line[:keylen])
         if offset > end:
             assert end != middle - 1, "infinite loop"
             end = middle - 1

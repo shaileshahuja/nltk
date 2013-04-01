@@ -78,6 +78,7 @@ from nltk.corpus.reader.verbnet import *
 from nltk.corpus.reader.bnc import *
 from nltk.corpus.reader.nps_chat import *
 from nltk.corpus.reader.wordnet import *
+from nltk.corpus.reader.multiwordnet import *
 from nltk.corpus.reader.switchboard import *
 from nltk.corpus.reader.dependency import *
 from nltk.corpus.reader.nombank import *
@@ -124,4 +125,5 @@ __all__ = [
     'CHILDESCorpusReader', 'AlignedCorpusReader',
     'TimitTaggedCorpusReader', 'LinThesaurusCorpusReader',
     'SemcorCorpusReader', 'UdhrCorpusReader',
+    'MultiWordNetCorpusReader'
 ]
