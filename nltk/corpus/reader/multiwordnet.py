@@ -160,29 +160,31 @@ class Synset(_WordNetObject):
 
 class MultiLinguilCorpusReader(CorpusReader):
 
-    def __init__(self, root, lang, filename):
+    def __init__(self, root, lang):
         """
         Construct a new wordnet corpus reader, with the given root
         directory.
         """
-        super(MultiLinguilCorpusReader, self).__init__(root, filename)
 
         self._lang = lang
+        self._data_file_name = 'wn-data-%s.tab' % self._lang
+        super(MultiLinguilCorpusReader, self).__init__(root, self._data_file_name)
+
         self._lemma_pos_offset_map = defaultdict(dict)
         """A index that provides the file offset
 
         Map from lemma -> pos -> synset_index -> offset"""
 
         self._synset_pos_lemma_map = defaultdict(dict)
-        """A index that provides the file offset
+        """A index that provides the lemmas
 
-        Map from lemma -> pos -> synset_index -> offset"""
+        Map from offset -> pos -> lemmas """
         self._synset_offset_cache = defaultdict(dict)
         """A cache so we don't have to reconstuct synsets
 
         Map from pos -> offset -> synset"""
 
-        self._data_file = None
+        self._data_file_stream = None
         # self._key_count_file = None
         # self._key_synset_file = None
 
@@ -192,7 +194,7 @@ class MultiLinguilCorpusReader(CorpusReader):
     def _load_lemma_pos_offset_map(self):
         # parse each line of the file (ignoring comment lines)
 
-        for i, line in enumerate(self.open('wn-data-%s.tab' % self._lang)):
+        for i, line in enumerate(self.open(self._data_file_name)):
             if line.startswith('#'):
                 continue
 
@@ -211,7 +213,7 @@ class MultiLinguilCorpusReader(CorpusReader):
 
             # raise more informative error with file name and line number
             except (AssertionError, ValueError) as e:
-                tup = ('wn-data-%s.tab' % self._lang), (i + 1), e
+                tup = self._data_file_name, (i + 1), e
                 raise WordNetError('file %s, line %i: %s' % tup)
 
             # map lemmas and parts of speech to synsets
@@ -278,14 +280,13 @@ class MultiWordNetCorpusReader(object):
         directory.
         """
         self._language_reader_map = dict()
-        self._language_reader_map['en'] = LazyCorpusLoader('wordnet', WordNetCorpusReader)
         main_dir = nltk.data.find('corpora/multiwordnet')
 
         for lang in os.walk(main_dir).next()[1]:
             self._language_reader_map[lang] = LazyCorpusLoader('multiwordnet/%s' % lang, MultiLinguilCorpusReader,
-                                                               lang, 'multiwordnet/%s' % lang)
+                                                               lang)
 
-    def synsets(self, lemma, pos=None, lang='en'):
+    def synsets(self, lemma, pos=None, lang='eng'):
         assert isinstance(lang, str) or isinstance(lang, list)
         if isinstance(lang, str):
             return self._language_reader_map[lang].synsets(lemma, pos)
@@ -295,7 +296,7 @@ class MultiWordNetCorpusReader(object):
                     synsets.append(self._language_reader_map[_lang].synsets(lemma, pos))
             return synsets
 
-    def lemmas(self, lemma, pos=None, lang='en'):
+    def lemmas(self, lemma, pos=None, lang='eng'):
         """Return all Lemma objects with a name matching the specified lemma
         name and part of speech tag. Matches any part of speech tag if none is
         specified."""
@@ -320,10 +321,10 @@ if __name__ == "__main__":
     mwn = MultiWordNetCorpusReader()
 
     # Print lemmas from french and english wordnets
-    print mwn.lemmas('vis', lang = ['fre', 'en'])
+    print mwn.lemmas('vis', lang=['fre', 'eng'])
 
     # Print lemmas from Japanese wordnet, tested on 2.7.3 only
-    lemmas = mwn.lemmas(u'犬', lang = ['jpn'])
+    lemmas = mwn.lemmas(u'犬', lang=['jpn'])
     for l in lemmas[0]:
         print l          # __repr__ doesn't return unicode
         print unicode(l) # prints japanese correctly
