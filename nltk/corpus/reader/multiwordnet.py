@@ -5,6 +5,7 @@ from collections import defaultdict
 from nltk.corpus.util import LazyCorpusLoader
 from nltk.corpus.reader.wordnet import WordNetCorpusReader, _WordNetObject, WordNetError
 from nltk.compat import xrange, python_2_unicode_compatible
+import nltk
 import os
 
 #{ Part-of-speech constants
@@ -272,10 +273,43 @@ class MultiWordNetCorpusReader(object):
         Construct a new wordnet corpus reader, with the given root
         directory.
         """
-    englishwordnet = LazyCorpusLoader(
-        'english_wordnet', WordNetCorpusReader)
-    frenchwordnet = LazyCorpusLoader('multiwordnet/fre', MultiLinguilCorpusReader)
+        self._language_reader_map = dict()
+        self._language_reader_map['en'] = LazyCorpusLoader('english_wordnet', WordNetCorpusReader)
+        main_dir = nltk.data.find('corpora/multiwordnet')
+        for lang in os.walk(main_dir).next()[1]:
+            self._language_reader_map[lang] = LazyCorpusLoader('multiwordnet/%s' % lang, MultiLinguilCorpusReader)
+
+    def synsets(self, lemma, pos=None, lang='en'):
+        assert isinstance(lang, str) or isinstance(lang, list)
+        if isinstance(lang, str):
+            return self._language_reader_map[lang].synsets(lemma, pos)
+        if isinstance(lang, list):
+            synsets = []
+            for _lang in lang:
+                    synsets.append(self._language_reader_map[_lang].synsets(lemma, pos))
+            return synsets
+
+    def lemmas(self, lemma, pos=None, lang='en'):
+        """Return all Lemma objects with a name matching the specified lemma
+        name and part of speech tag. Matches any part of speech tag if none is
+        specified."""
+        assert isinstance(lang, str) or isinstance(lang, list)
+        lemma = lemma.lower()
+        synsets = self.synsets(lemma, pos, lang)
+        if isinstance(lang, str):
+            return [lemma_obj
+                    for synset in synsets
+                    for lemma_obj in synset.lemmas
+                    if lemma_obj.name.lower() == lemma]
+        if isinstance(lang, list):
+            lemmas = []
+            for synlist in synsets:
+                lemmas.append([lemma_obj
+                               for synset in synlist
+                               for lemma_obj in synset.lemmas
+                               if lemma_obj.name.lower() == lemma])
+            return lemmas
 
 if __name__ == "__main__":
     mwn = MultiWordNetCorpusReader()
-    print mwn.frenchwordnet.synsets('vis')
+    print mwn.lemmas('vis', lang = ['fre', 'en'])
