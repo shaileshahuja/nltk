@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 __author__ = 'shailesh'
 
 from nltk.corpus.reader import CorpusReader
@@ -73,7 +75,11 @@ class Lemma(_WordNetObject):
 
     def __repr__(self):
         tup = type(self).__name__, self.synset.name, self.name
-        return "%s('%s.%s')" % tup
+        return u"%s('%s.%s')" % tup
+
+    def __str__(self):
+        tup = type(self).__name__, self.synset.name, self.name
+        return u"%s('%s.%s')" % tup
 
 
 @python_2_unicode_compatible
@@ -149,21 +155,19 @@ class Synset(_WordNetObject):
         self._lemma_pointers = defaultdict(set)
 
     def __repr__(self):
-        return "%s('%s')" % (type(self).__name__, self.name)
+        return u"%s('%s')" % (type(self).__name__, self.name)
 
 
 class MultiLinguilCorpusReader(CorpusReader):
 
-    _FILE = 'wn-data-fre.tab'
-
-    def __init__(self, root):
+    def __init__(self, root, lang, filename):
         """
         Construct a new wordnet corpus reader, with the given root
         directory.
         """
-        super(MultiLinguilCorpusReader, self).__init__(root, self._FILE)
+        super(MultiLinguilCorpusReader, self).__init__(root, filename)
 
-        self._lang = 'fre'
+        self._lang = lang
         self._lemma_pos_offset_map = defaultdict(dict)
         """A index that provides the file offset
 
@@ -228,7 +232,7 @@ class MultiLinguilCorpusReader(CorpusReader):
         index = self._lemma_pos_offset_map
         if lemma not in index:
             error = "Enter exact lemma name as morphological substitutions are not supported yet for multiwordnet"
-            raise WordNetError('Lemma %s not found. %s.' % lemma, error)
+            raise WordNetError('Lemma %s not found. %s.' % (lemma, error))
 
         if pos is None:
             pos = POS_LIST
@@ -274,10 +278,12 @@ class MultiWordNetCorpusReader(object):
         directory.
         """
         self._language_reader_map = dict()
-        self._language_reader_map['en'] = LazyCorpusLoader('english_wordnet', WordNetCorpusReader)
+        self._language_reader_map['en'] = LazyCorpusLoader('wordnet', WordNetCorpusReader)
         main_dir = nltk.data.find('corpora/multiwordnet')
+
         for lang in os.walk(main_dir).next()[1]:
-            self._language_reader_map[lang] = LazyCorpusLoader('multiwordnet/%s' % lang, MultiLinguilCorpusReader)
+            self._language_reader_map[lang] = LazyCorpusLoader('multiwordnet/%s' % lang, MultiLinguilCorpusReader,
+                                                               lang, 'multiwordnet/%s' % lang)
 
     def synsets(self, lemma, pos=None, lang='en'):
         assert isinstance(lang, str) or isinstance(lang, list)
@@ -312,4 +318,12 @@ class MultiWordNetCorpusReader(object):
 
 if __name__ == "__main__":
     mwn = MultiWordNetCorpusReader()
+
+    # Print lemmas from french and english wordnets
     print mwn.lemmas('vis', lang = ['fre', 'en'])
+
+    # Print lemmas from Japanese wordnet, tested on 2.7.3 only
+    lemmas = mwn.lemmas(u'犬', lang = ['jpn'])
+    for l in lemmas[0]:
+        print l          # __repr__ doesn't return unicode
+        print unicode(l) # prints japanese correctly
