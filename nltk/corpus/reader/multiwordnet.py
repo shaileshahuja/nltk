@@ -5,7 +5,7 @@ __author__ = 'shailesh'
 from nltk.corpus.reader import CorpusReader
 from collections import defaultdict
 from nltk.corpus.util import LazyCorpusLoader
-from nltk.corpus.reader.wordnet import WordNetCorpusReader, _WordNetObject, WordNetError
+from nltk.corpus.reader.wordnet import _WordNetObject, WordNetError
 from nltk.compat import xrange, python_2_unicode_compatible
 import nltk
 import os
@@ -139,10 +139,10 @@ class Synset(_WordNetObject):
                  '_pointers', '_lemma_pointers', '_max_depth',
                  '_min_depth', ]
 
-    def __init__(self, wordnet_corpus_reader):
-        self._wordnet_corpus_reader = wordnet_corpus_reader
+    def __init__(self, extended_wordnet, lang='eng'):
+        self._extended_wordnet = extended_wordnet
         # All of these attributes get initialized by
-        # WordNetCorpusReader._synset_from_pos_and_line()
+        # MultiLinguilCorpusReader._synset_from_pos_and_offset()
 
         self.pos = None
         self.offset = None
@@ -150,9 +150,26 @@ class Synset(_WordNetObject):
         self.frame_ids = []
         self.lemmas = []
         self.lemma_names = []
-
+        self._lang = lang
         self._pointers = defaultdict(set)
         self._lemma_pointers = defaultdict(set)
+
+    def translate_lemma_names(self, lang):
+        assert (isinstance(lang, str) and lang in self._extended_wordnet._language_reader_map) or isinstance(lang, list)
+        if isinstance(lang, str):
+            if lang == self._lang:
+                return self.lemma_names
+            lsynset = self._extended_wordnet._language_reader_map[lang].synset(self.name)
+            return lsynset.lemma_names
+        lemmas = []
+        for _lang in lang:
+            assert _lang in self._extended_wordnet._language_reader_map
+            if _lang == self._lang:
+                lemmas.append(self.lemma_names)
+            else:
+                sset = self._extended_wordnet._language_reader_map[_lang]._synset_from_pos_and_offset(self.pos, self.offset)
+                lemmas.append(sset.lemma_names)
+        return lemmas
 
     def __repr__(self):
         return u"%s('%s')" % (type(self).__name__, self.name)
@@ -160,7 +177,7 @@ class Synset(_WordNetObject):
 
 class MultiLinguilCorpusReader(CorpusReader):
 
-    def __init__(self, root, lang):
+    def __init__(self, root, lang, extended_wordnet):
         """
         Construct a new wordnet corpus reader, with the given root
         directory.
@@ -170,6 +187,7 @@ class MultiLinguilCorpusReader(CorpusReader):
         self._data_file_name = 'wn-data-%s.tab' % self._lang
         super(MultiLinguilCorpusReader, self).__init__(root, self._data_file_name)
 
+        self._extended_wordnet = extended_wordnet
         self._lemma_pos_offset_map = defaultdict(dict)
         """A index that provides the file offset
 
@@ -198,7 +216,7 @@ class MultiLinguilCorpusReader(CorpusReader):
             if line.startswith('#'):
                 continue
 
-            _iter = iter(line.split())
+            _iter = iter(line.split('\t'))
             _next_token = lambda: next(_iter)
             try:
 
@@ -209,7 +227,7 @@ class MultiLinguilCorpusReader(CorpusReader):
                 _ = _next_token()
 
                 # get lemma name
-                lemma = _next_token()
+                lemma = _next_token().strip()
 
             # raise more informative error with file name and line number
             except (AssertionError, ValueError) as e:
@@ -249,7 +267,9 @@ class MultiLinguilCorpusReader(CorpusReader):
             return self._synset_offset_cache[pos][offset]
 
         synset_map = self._synset_pos_lemma_map
-        synset = Synset(self)
+        if offset not in synset_map or pos not in synset_map[offset]:
+            return Synset(self._extended_wordnet, self._lang)
+        synset = Synset(self._extended_wordnet, self._lang)
         synset.offset = int(offset)
         synset.pos = pos
         for lemma_name in synset_map[offset][pos]:
@@ -268,8 +288,39 @@ class MultiLinguilCorpusReader(CorpusReader):
         self._synset_offset_cache[pos][offset] = synset
         return synset
 
+        #////////////////////////////////////////////////////////////
+    # Loading Synsets
+    #////////////////////////////////////////////////////////////
+    def synset(self, name):
+        # split name into lemma, part of speech and synset number
+        lemma, pos, synset_index_str = name.lower().rsplit('.', 2)
+        synset_index = int(synset_index_str) - 1
 
-class MultiWordNetCorpusReader(object):
+        # get the offset for this synset
+        try:
+            offset = self._lemma_pos_offset_map[lemma][pos][synset_index]
+        except KeyError:
+            message = 'no lemma %r with part of speech %r'
+            raise WordNetError(message % (lemma, pos))
+        except IndexError:
+            n_senses = len(self._lemma_pos_offset_map[lemma][pos])
+            message = "lemma %r with part of speech %r has only %i %s"
+            if n_senses == 1:
+                tup = lemma, pos, n_senses, "sense"
+            else:
+                tup = lemma, pos, n_senses, "senses"
+            raise WordNetError(message % tup)
+
+        # load synset information from the appropriate file
+        synset = self._synset_from_pos_and_offset(pos, offset)
+
+        assert synset.pos == pos
+
+        # Return the synset object.
+        return synset
+
+
+class ExtendedWordnet(object):
     """
     A corpus reader used to access wordnet or its variants.
     """
@@ -284,47 +335,41 @@ class MultiWordNetCorpusReader(object):
 
         for lang in os.walk(main_dir).next()[1]:
             self._language_reader_map[lang] = LazyCorpusLoader('multiwordnet/%s' % lang, MultiLinguilCorpusReader,
-                                                               lang)
+                                                               lang, self)
 
     def synsets(self, lemma, pos=None, lang='eng'):
-        assert isinstance(lang, str) or isinstance(lang, list)
-        if isinstance(lang, str):
-            return self._language_reader_map[lang].synsets(lemma, pos)
-        if isinstance(lang, list):
-            synsets = []
-            for _lang in lang:
-                    synsets.append(self._language_reader_map[_lang].synsets(lemma, pos))
-            return synsets
+        assert isinstance(lang, str)
+        assert lang in self._language_reader_map
+        return self._language_reader_map[lang].synsets(lemma, pos)
 
     def lemmas(self, lemma, pos=None, lang='eng'):
         """Return all Lemma objects with a name matching the specified lemma
         name and part of speech tag. Matches any part of speech tag if none is
         specified."""
-        assert isinstance(lang, str) or isinstance(lang, list)
+        assert isinstance(lang, str)
+        assert lang in self._language_reader_map
         lemma = lemma.lower()
         synsets = self.synsets(lemma, pos, lang)
-        if isinstance(lang, str):
-            return [lemma_obj
-                    for synset in synsets
-                    for lemma_obj in synset.lemmas
-                    if lemma_obj.name.lower() == lemma]
-        if isinstance(lang, list):
-            lemmas = []
-            for synlist in synsets:
-                lemmas.append([lemma_obj
-                               for synset in synlist
-                               for lemma_obj in synset.lemmas
-                               if lemma_obj.name.lower() == lemma])
-            return lemmas
+        return [lemma_obj
+                for synset in synsets
+                for lemma_obj in synset.lemmas
+                if lemma_obj.name.lower() == lemma]
+
+    def synset(self, name, lang='eng'):
+        assert isinstance(lang, str)
+        assert lang in self._language_reader_map
+        return self._language_reader_map[lang].synset(name)
+
 
 if __name__ == "__main__":
-    mwn = MultiWordNetCorpusReader()
-
-    # Print lemmas from french and english wordnets
-    print mwn.lemmas('vis', lang=['fre', 'eng'])
-
-    # Print lemmas from Japanese wordnet, tested on 2.7.3 only
-    lemmas = mwn.lemmas(u'犬', lang=['jpn'])
-    for l in lemmas[0]:
-        print l          # __repr__ doesn't return unicode
-        print unicode(l) # prints japanese correctly
+    mwn = ExtendedWordnet()
+    dog = mwn.synset('dog.n.01')
+    print dog.translate_lemma_names(['eng', 'fre', 'ind'])
+    # Print lemmas from french wordnet
+    # print mwn.lemmas('vis', lang='fre)
+    #
+    # # Print lemmas from Japanese wordnet, tested on 2.7.3 only
+    # lemmas = mwn.lemmas(u'犬', lang='jpn')
+    # for l in lemmas[0]:
+    #     print l          # __repr__ doesn't return unicode
+    #     print unicode(l) # prints japanese correctly

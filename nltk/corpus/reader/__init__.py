@@ -125,5 +125,5 @@ __all__ = [
     'CHILDESCorpusReader', 'AlignedCorpusReader',
     'TimitTaggedCorpusReader', 'LinThesaurusCorpusReader',
     'SemcorCorpusReader', 'UdhrCorpusReader',
-    'MultiWordNetCorpusReader'
+    'ExtendedWordnet'
 ]
