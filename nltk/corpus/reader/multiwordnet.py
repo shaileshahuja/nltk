@@ -276,27 +276,6 @@ class ExtendedWordNetCorpusReader(object):
         assert lang in self._language_map
         return getattr(self._language_map[lang], self._method, None)(*args, **kwargs)
 
-    # See comment below
-    #def __getattr__(self, attr):
-    #    """
-    #    Returns a ProxyCaller object that takes care of redirecting the call to the appropriate
-    #    language corpus reader object.
-    #    """
-    #    self._method = attr
-    #    return self
-
-# Don't want to use this proxy object as one is created every function call
-#class WordNetProxy(object):
-#    def __init__(self, language_map, method):
-#        self._language_map = language_map
-#        self._method = method
-#
-#    def __call__(self, *args, **kwargs):
-#        lang = kwargs.pop('lang', 'eng')
-#        assert isinstance(lang, str)
-#        assert lang in self._language_map
-#        return getattr(self._language_map[lang], self._method, None)(*args, **kwargs)
-
 
 if __name__ == "__main__":
     ewn = ExtendedWordNetCorpusReader()
