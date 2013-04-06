@@ -1,7 +1,4 @@
-__author__ = 'shailesh'
-
 import math
-
 
 ######################################################################
 ## Constants
@@ -189,4 +186,3 @@ def teardown_module(module):
 
 class WordNetError(Exception):
     """An exception class for wordnet-related errors."""
-

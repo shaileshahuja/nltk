@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 
-__author__ = 'shailesh'
 
 from nltk.corpus.reader import CorpusReader
 from collections import defaultdict
@@ -14,6 +13,11 @@ from nltk import FreqDist
 
 
 class MultiLinguilCorpusReader(CorpusReader):
+    """
+    A corpus reader used to access multiple WordNets
+    from the Open Multilingual WordNet corpus and
+    NLTK's english WordNet.
+    """
 
     def __init__(self, root, lang, extended_wordnet):
         """
@@ -85,7 +89,7 @@ class MultiLinguilCorpusReader(CorpusReader):
         get_synset = self._synset_from_pos_and_offset
         index = self._lemma_pos_offset_map
         if lemma not in index:
-            error = "Enter exact lemma name as morphological substitutions are not supported yet for multiwordnet"
+            error = "Enter exact lemma name as morphological substitutions are not supported"
             raise WordNetError('Lemma %s not found. %s.' % (lemma, error))
 
         if pos is None:
@@ -96,15 +100,16 @@ class MultiLinguilCorpusReader(CorpusReader):
                 for offset in index[lemma].get(p, [])]
 
     def _synset_from_pos_and_offset(self, pos, offset):
-        synset = self._extended_wordnet._language_reader_map['eng']._synset_from_pos_and_offset(pos, offset)
+        language_map = self._extended_wordnet._language_map['eng']
+        synset = language_map._synset_from_pos_and_offset(pos, offset)
         synset.translate_lemma_names(self._lang)
         return synset
 
-        #////////////////////////////////////////////////////////////
+    #////////////////////////////////////////////////////////////
     # Loading Synsets
     #////////////////////////////////////////////////////////////
     def synset(self, name):
-        synset = self._extended_wordnet._language_reader_map['eng'].synset(name)
+        synset = self._extended_wordnet._language_map['eng'].synset(name)
         synset.translate_lemma_names(self._lang)
         return synset
 
@@ -136,7 +141,7 @@ class MultiLinguilCorpusReader(CorpusReader):
         If no pos is specified, all synsets for all parts of speech
         will be loaded.
         """
-        synsets = self._extended_wordnet._language_reader_map['eng'].synsets(pos)
+        synsets = self._extended_wordnet._language_map['eng'].synsets(pos)
         for synset in synsets:
             synset.translate_lemma_names(self._lang)
         return synsets
@@ -144,7 +149,8 @@ class MultiLinguilCorpusReader(CorpusReader):
     def lemma_count(self, lemma):
         """Return the frequency count for this Lemma"""
         # open the count file if we haven't already
-        return sum(len(self._lemma_pos_offset_map[lemma][pos]) for pos in self._lemma_pos_offset_map[lemma])
+        return sum(len(self._lemma_pos_offset_map[lemma][pos])
+                   for pos in self._lemma_pos_offset_map[lemma])
 
     def lemma(self, name):
         synset_name, lemma_name = name.rsplit('.', 1)
@@ -155,13 +161,13 @@ class MultiLinguilCorpusReader(CorpusReader):
         raise WordNetError('no lemma %r in %r' % (lemma_name, synset_name))
 
     def lemma_from_key(self, key):
-        raise WordNetError("Method Not supported Yet for MultiLinguil Corpus")
+        raise WordNetError("Method not yet supported for MultiLinguil Corpus")
 
     def get_version(self):
-        raise WordNetError("Method Not supported Yet for MultiLinguil Corpus")
+        raise WordNetError("Method not yet supported for MultiLinguil Corpus")
 
     def morphy(self, form, pos=None):
-        raise WordNetError("Method Not supported Yet for MultiLinguil Corpus")
+        raise WordNetError("Method not yet supported for MultiLinguil Corpus")
 
     def path_similarity(self, synset1, synset2, verbose=False, simulate_root=True):
         return synset1.path_similarity(synset2, verbose, simulate_root)
@@ -242,61 +248,73 @@ class MultiLinguilCorpusReader(CorpusReader):
         return ic
 
 
-class ExtendedWordnet(object):
+class ExtendedWordNetCorpusReader(object):
     """
-    A corpus reader used to access wordnet or its variants.
+    A proxy class used to access the extended wordnet reader.
     """
-
     def __init__(self):
         """
         Construct a new wordnet corpus reader, with the given root
-        directory.
+        directory. Uses the default WordNetCorpusReader for english
+        and ExtendedWordNetCorpusReader for other languages.
         """
-        self._language_reader_map = dict()
+        self._language_map = dict()
         main_dir = nltk.data.find('corpora/multiwordnet')
-        self._language_reader_map['eng'] = LazyCorpusLoader('wordnet', WordNetCorpusReader, self)
+        self._language_map['eng'] = LazyCorpusLoader('wordnet', WordNetCorpusReader, self)
         for lang in os.walk(main_dir).next()[1]:
-            self._language_reader_map[lang] = LazyCorpusLoader('multiwordnet/%s' % lang, MultiLinguilCorpusReader,
-                                                               lang, self)
+            self._language_map[lang] = LazyCorpusLoader('multiwordnet/%s' % lang,
+                                                        MultiLinguilCorpusReader,
+                                                        lang, self)
 
     def __getattr__(self, attr):
-        """
-        Returns a ProxyCaller object that takes care of redirecting the call to the appropriate
-        language corpus reader object.
-        """
-        return ProxyCaller(self._language_reader_map, attr)
-
-
-class ProxyCaller(object):
-    def __init__(self, language_reader_map, method):
-        self._language_reader_map = language_reader_map
-        self._method = method
+        self._method = attr
+        return self
 
     def __call__(self, *args, **kwargs):
-        if 'lang' in kwargs:
-            lang = kwargs['lang']
-            del kwargs['lang']  # remove the lang parameter since it has been extracted
-        else:
-            lang = 'eng'
+        lang = kwargs.pop('lang', 'eng')
         assert isinstance(lang, str)
-        assert lang in self._language_reader_map
-        return getattr(self._language_reader_map[lang], self._method, None)(*args, **kwargs)
+        assert lang in self._language_map
+        return getattr(self._language_map[lang], self._method, None)(*args, **kwargs)
+
+    # See comment below
+    #def __getattr__(self, attr):
+    #    """
+    #    Returns a ProxyCaller object that takes care of redirecting the call to the appropriate
+    #    language corpus reader object.
+    #    """
+    #    self._method = attr
+    #    return self
+
+# Don't want to use this proxy object as one is created every function call
+#class WordNetProxy(object):
+#    def __init__(self, language_map, method):
+#        self._language_map = language_map
+#        self._method = method
+#
+#    def __call__(self, *args, **kwargs):
+#        lang = kwargs.pop('lang', 'eng')
+#        assert isinstance(lang, str)
+#        assert lang in self._language_map
+#        return getattr(self._language_map[lang], self._method, None)(*args, **kwargs)
+
 
 if __name__ == "__main__":
-    ewn = ExtendedWordnet()
+    ewn = ExtendedWordNetCorpusReader()
+
     dog = ewn.synset('dog.n.01')
     print dog.lemma_names
     print dog
+
     dogjpn = ewn.synset('dog.n.01', lang='jpn')
     print dog.lemma_names
     print dog.translate_lemma_names(['eng', 'fre', 'ind'])
-    #Print lemmas from french wordnet
+
+    # Print lemmas from french wordnet
     print ewn.lemmas('vis', lang='fre')
 
     # Print lemmas from Japanese wordnet, tested on 2.7.3 only
     synsets = ewn.synsets(u'犬', lang='jpn')
     for l in synsets[0].lemmas['jpn']:
-        print l      # __repr__ doesn't return unicode
         print l.name  # prints japanese correctly
 
     print synsets[0].hypernym_paths()

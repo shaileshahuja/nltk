@@ -1,12 +1,10 @@
-__author__ = 'shailesh'
-
-
 from nltk.compat import python_2_unicode_compatible
 from itertools import chain
 from collections import defaultdict
 from operator import itemgetter
 import math
 from wordnet_utils import *
+
 ######################################################################
 ## Data Classes
 ######################################################################
@@ -251,21 +249,21 @@ class Synset(_WordNetObject):
         self._lemma_pointers = defaultdict(set)
 
     def translate_lemma_names(self, lang):
-        assert (isinstance(lang, str) and lang in self._extended_wordnet._language_reader_map) or isinstance(lang, list)
+        assert (isinstance(lang, str) and lang in self._extended_wordnet._language_map) or isinstance(lang, list)
         if isinstance(lang, str):
             if lang not in self.lemma_names:
-                for lemma_name in self._extended_wordnet._language_reader_map[lang]._synset_pos_lemma_map[self.offset][self.pos]:
-                    lemma = Lemma(self._extended_wordnet._language_reader_map[lang], self, lemma_name, None, None, None)
+                for lemma_name in self._extended_wordnet._language_map[lang]._synset_pos_lemma_map[self.offset][self.pos]:
+                    lemma = Lemma(self._extended_wordnet._language_map[lang], self, lemma_name, None, None, None)
                     self.lemmas[lang].append(lemma)
                     self.lemma_names[lang].append(lemma.name)
             return self.lemma_names[lang]
         lemmas = dict()
         for _lang in lang:
-            assert _lang in self._extended_wordnet._language_reader_map
+            assert _lang in self._extended_wordnet._language_map
             if _lang not in self.lemma_names:
-                synset_map = self._extended_wordnet._language_reader_map[_lang]._synset_pos_lemma_map
+                synset_map = self._extended_wordnet._language_map[_lang]._synset_pos_lemma_map
                 for lemma_name in synset_map[self.offset][self.pos]:
-                    lemma = Lemma(self._extended_wordnet._language_reader_map[_lang], self, lemma_name, None, None, None)
+                    lemma = Lemma(self._extended_wordnet._language_map[_lang], self, lemma_name, None, None, None)
                     self.lemmas[_lang].append(lemma)
                     self.lemma_names[_lang].append(lemma.name)
             lemmas[_lang] = self.lemma_names[_lang]
@@ -765,5 +763,3 @@ class Synset(_WordNetObject):
         get_synset = self._wordnet_corpus_reader._synset_from_pos_and_offset
         pointer_tuples = self._pointers[relation_symbol]
         return [get_synset(pos, offset) for pos, offset in pointer_tuples]
-
-
