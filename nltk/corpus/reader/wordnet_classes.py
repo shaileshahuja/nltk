@@ -391,7 +391,7 @@ class Synset(_WordNetObject):
     def lowest_common_hypernyms(self, other, simulate_root=False):
         """Get the lowest synset that both synsets have as a hypernym."""
 
-        fake_synset = Synset(None)
+        fake_synset = Synset(None, None)
         fake_synset.name = '*ROOT*'
         fake_synset.hypernyms = lambda: []
         fake_synset.instance_hypernyms = lambda: []
@@ -429,7 +429,7 @@ class Synset(_WordNetObject):
         for hypernym in self.hypernyms() + self.instance_hypernyms():
             distances |= hypernym.hypernym_distances(distance+1, simulate_root=False)
         if simulate_root:
-            fake_synset = Synset(None)
+            fake_synset = Synset(None, None)
             fake_synset.name = '*ROOT*'
             fake_synset_distance = max(distances, key=itemgetter(1))[1]
             distances.add((fake_synset, fake_synset_distance+1))
